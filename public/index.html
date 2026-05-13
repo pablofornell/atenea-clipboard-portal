@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clipboard Portal</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap');
+
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      height: 100%;
+      background-color: #2b1d14;
+      color: #d4a574;
+      font-family: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Courier New', monospace;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+      padding: 1.5rem 2rem 0;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 1.25rem;
+      flex-shrink: 0;
+    }
+
+    h1 {
+      font-size: 2rem;
+      font-weight: 500;
+      letter-spacing: 0.05em;
+      color: #e8d5b7;
+    }
+
+    #status {
+      display: inline-block;
+      margin-top: 0.35rem;
+      font-size: 0.7rem;
+      color: #7a5c3a;
+      min-height: 1em;
+      transition: color 0.4s ease, opacity 0.4s ease;
+    }
+
+    #status.saving { color: #c49a5a; }
+    #status.saved  { color: #7a5c3a; }
+
+    #textarea-wrapper {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+    }
+
+    textarea {
+      flex: 1;
+      width: 100%;
+      resize: none;
+      border: none;
+      outline: none;
+      background-color: #1f140d;
+      color: #d4a574;
+      font-family: inherit;
+      font-size: 1rem;
+      line-height: 1.6;
+      padding: 1rem;
+      border-radius: 2px;
+      caret-color: #f0b87a;
+      /* no bottom margin — bleeds to edge */
+    }
+
+    textarea::selection {
+      background-color: #5c3b1e;
+      color: #e8d5b7;
+    }
+
+    textarea::placeholder {
+      color: #4a3020;
+    }
+
+    #ttl {
+      flex-shrink: 0;
+      text-align: right;
+      font-size: 0.65rem;
+      color: #4a3020;
+      padding: 0.25rem 0.15rem 0.25rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Clipboard Portal</h1>
+    <span id="status"></span>
+  </header>
+
+  <div id="textarea-wrapper">
+    <textarea id="clipboard" placeholder="Paste or type here…" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+    <div id="ttl"></div>
+  </div>
+
+  <script>
+    const textarea = document.getElementById('clipboard');
+    const statusEl = document.getElementById('status');
+    const ttlEl = document.getElementById('ttl');
+
+    const POLL_INTERVAL = 3000;
+    const DEBOUNCE_MS = 500;
+    const TTL_DAYS = 7;
+
+    let lastSavedText = '';
+    let saveTimer = null;
+    let pollTimer = null;
+    let updatedAt = null;
+    let isSaving = false;
+
+    function setStatus(state) {
+      statusEl.className = state;
+      if (state === 'saving') statusEl.textContent = 'saving…';
+      else if (state === 'saved') statusEl.textContent = 'saved';
+      else statusEl.textContent = '';
+    }
+
+    function formatTTL(ts) {
+      if (!ts) return '';
+      const expiresAt = ts + TTL_DAYS * 24 * 60 * 60 * 1000;
+      const diffMs = expiresAt - Date.now();
+      if (diffMs <= 0) return 'expires: soon';
+      const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const diffHours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      if (diffDays > 0) return `expires in ${diffDays}d ${diffHours}h`;
+      const diffMins = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      return `expires in ${diffHours}h ${diffMins}m`;
+    }
+
+    async function load() {
+      try {
+        const res = await fetch('/clipboard');
+        const data = await res.json();
+        if (data.text !== lastSavedText) {
+          const pos = textarea.selectionStart;
+          textarea.value = data.text;
+          lastSavedText = data.text;
+          // restore cursor only if same length (rough heuristic)
+          try { textarea.setSelectionRange(pos, pos); } catch {}
+        }
+        updatedAt = data.updatedAt;
+        ttlEl.textContent = formatTTL(updatedAt);
+      } catch {}
+    }
+
+    async function save(text) {
+      isSaving = true;
+      setStatus('saving');
+      try {
+        const res = await fetch('/clipboard', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text }),
+        });
+        const data = await res.json();
+        lastSavedText = text;
+        updatedAt = data.updatedAt;
+        ttlEl.textContent = formatTTL(updatedAt);
+        setStatus('saved');
+        setTimeout(() => { if (statusEl.className === 'saved') setStatus(''); }, 2000);
+      } catch {
+        setStatus('');
+      } finally {
+        isSaving = false;
+      }
+    }
+
+    textarea.addEventListener('input', () => {
+      clearTimeout(saveTimer);
+      setStatus('saving');
+      saveTimer = setTimeout(() => save(textarea.value), DEBOUNCE_MS);
+    });
+
+    function schedulePoll() {
+      clearTimeout(pollTimer);
+      pollTimer = setTimeout(async () => {
+        if (!isSaving) await load();
+        schedulePoll();
+      }, POLL_INTERVAL);
+    }
+
+    (async () => {
+      await load();
+      textarea.focus();
+      schedulePoll();
+    })();
+  </script>
+</body>
+</html>
