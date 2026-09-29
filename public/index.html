@@ -15,7 +15,7 @@
     }
 
     html, body {
-      height: 100%;
+      min-height: 100%;
       background-color: #2b1d14;
       color: #d4a574;
       font-family: 'JetBrains Mono', 'Fira Code', 'IBM Plex Mono', 'Courier New', monospace;
@@ -24,7 +24,8 @@
     body {
       display: flex;
       flex-direction: column;
-      padding: 1.5rem 2rem 0;
+      min-height: 100dvh;
+      padding: 1.5rem 2rem 1rem;
     }
 
     header {
@@ -52,16 +53,25 @@
     #status.saving { color: #c49a5a; }
     #status.saved  { color: #7a5c3a; }
 
-    #textarea-wrapper {
+    .workspace {
       flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(20rem, 28rem);
+      gap: 1rem;
+    }
+
+    #textarea-wrapper {
       display: flex;
       flex-direction: column;
+      min-width: 0;
       min-height: 0;
     }
 
     textarea {
       flex: 1;
       width: 100%;
+      min-height: 12rem;
       resize: none;
       border: none;
       outline: none;
@@ -92,6 +102,46 @@
       color: #4a3020;
       padding: 0.25rem 0.15rem 0.25rem;
     }
+
+    .files-panel { display: flex; flex-direction: column; min-width: 0; min-height: 0; border-left: 1px solid #5c3b1e; padding-left: 1rem; }
+    .files-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem; margin-bottom: 0.65rem; }
+    .files-heading h2 { margin: 0; font-size: 0.9rem; font-weight: 500; color: #e8d5b7; }
+    .files-heading span { color: #a17b56; font-size: 0.68rem; text-align: right; }
+    .files-content { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 1rem; }
+    .drop-zone { min-height: 9rem; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 0.4rem; border: 1px dashed #99724e; background: #1f140d; text-align: center; transition: border-color 0.2s, background-color 0.2s; }
+    .drop-zone.dragging { border-color: #f0b87a; background: #3c2819; }
+    .drop-zone strong { color: #e8d5b7; font-size: 0.8rem; font-weight: 500; }
+    .drop-zone small { color: #a17b56; font-size: 0.66rem; }
+    .choose-button, .file-action { border: 1px solid #5c3b1e; border-radius: 2px; background: transparent; color: #d4a574; font: inherit; cursor: pointer; }
+    .choose-button:hover, .file-action:hover { border-color: #f0b87a; color: #e8d5b7; }
+    .choose-button { padding: 0.4rem 0.8rem; font-size: 0.7rem; }
+    .file-action { padding: 0.25rem 0.45rem; font-size: 0.68rem; text-decoration: none; }
+    .file-action:disabled, .choose-button:disabled { opacity: 0.5; cursor: wait; }
+    button:focus-visible, a:focus-visible, textarea:focus-visible { outline: 2px solid #f0b87a; outline-offset: 2px; }
+    #file-input { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+    .file-list-wrap { flex: 1; min-height: 0; overflow-y: auto; background: #1f140d; }
+    #file-list { list-style: none; margin: 0; padding: 0; }
+    .file-row { display: flex; align-items: center; gap: 0.7rem; min-width: 0; padding: 0.65rem 0.75rem; border-bottom: 1px solid #49301d; }
+    .file-row:last-child { border-bottom: 0; }
+    .file-info { min-width: 0; flex: 1; }
+    .file-name { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #e8d5b7; font-size: 0.76rem; }
+    .file-meta { display: block; margin-top: 0.2rem; color: #a17b56; font-size: 0.62rem; }
+    .file-actions { display: flex; gap: 0.35rem; flex-shrink: 0; }
+    .file-empty { padding: 1.25rem; color: #a17b56; font-size: 0.72rem; line-height: 1.6; }
+    #file-status { min-height: 1.35rem; padding-top: 0.4rem; color: #a17b56; font-size: 0.67rem; }
+    #file-status.error { color: #e5a18a; }
+    @media (max-width: 850px) {
+      body { padding: 1rem; }
+      h1 { font-size: 1.5rem; }
+      .workspace { display: flex; flex-direction: column; min-height: auto; }
+      #textarea-wrapper { flex-shrink: 0; height: 42dvh; min-height: 16rem; }
+      .files-panel { border-left: 0; border-top: 1px solid #5c3b1e; padding-left: 0; padding-top: 0.8rem; }
+      .files-content { flex: initial; gap: 0.65rem; }
+      .file-list-wrap { flex: initial; min-height: 9rem; max-height: 16rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: 0.01ms !important; }
+    }
   </style>
 </head>
 <body>
@@ -100,25 +150,52 @@
     <span id="status"></span>
   </header>
 
-  <div id="textarea-wrapper">
-    <textarea id="clipboard" placeholder="Paste or type here…" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
-    <div id="ttl"></div>
-  </div>
+  <main class="workspace">
+    <div id="textarea-wrapper">
+      <textarea id="clipboard" placeholder="Paste or type here…" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+      <div id="ttl"></div>
+    </div>
+
+    <section class="files-panel" aria-labelledby="files-title">
+      <div class="files-heading">
+        <h2 id="files-title">Shared files</h2>
+        <span>Available on this network · up to 100 MiB each</span>
+      </div>
+      <div class="files-content">
+        <div class="drop-zone" id="drop-zone">
+          <strong>Drop files here</strong>
+          <small>or choose files to share</small>
+          <button class="choose-button" id="choose-button" type="button">Add files</button>
+          <input id="file-input" type="file" multiple aria-label="Choose files to share">
+        </div>
+        <div class="file-list-wrap"><ul id="file-list" aria-label="Shared files"></ul></div>
+      </div>
+      <div id="file-status" role="status" aria-live="polite"></div>
+    </section>
+  </main>
 
   <script>
     const textarea = document.getElementById('clipboard');
     const statusEl = document.getElementById('status');
     const ttlEl = document.getElementById('ttl');
+    const fileInput = document.getElementById('file-input');
+    const fileList = document.getElementById('file-list');
+    const fileStatus = document.getElementById('file-status');
+    const dropZone = document.getElementById('drop-zone');
+    const chooseButton = document.getElementById('choose-button');
 
     const POLL_INTERVAL = 3000;
     const DEBOUNCE_MS = 500;
     const TTL_DAYS = 7;
+    const MAX_FILE_SIZE = 100 * 1024 * 1024;
 
     let lastSavedText = '';
     let saveTimer = null;
     let pollTimer = null;
     let updatedAt = null;
     let isSaving = false;
+    let fileListKey = '';
+    let isUploading = false;
 
     function setStatus(state) {
       statusEl.className = state;
@@ -129,7 +206,10 @@
 
     function formatTTL(ts) {
       if (!ts) return '';
-      const expiresAt = ts + TTL_DAYS * 24 * 60 * 60 * 1000;
+      return formatExpiry(ts + TTL_DAYS * 24 * 60 * 60 * 1000);
+    }
+
+    function formatExpiry(expiresAt) {
       const diffMs = expiresAt - Date.now();
       if (diffMs <= 0) return 'expires: soon';
       const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
@@ -177,6 +257,157 @@
       }
     }
 
+    function formatSize(bytes) {
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function setFileStatus(message, error = false) {
+      fileStatus.textContent = message;
+      fileStatus.classList.toggle('error', error);
+    }
+
+    function renderFiles(files) {
+      fileList.replaceChildren();
+      if (!files.length) {
+        const empty = document.createElement('li');
+        empty.className = 'file-empty';
+        empty.textContent = 'No files shared yet. Add one to make it available on this network.';
+        fileList.append(empty);
+        return;
+      }
+      for (const file of files) {
+        const row = document.createElement('li');
+        row.className = 'file-row';
+        const info = document.createElement('div');
+        info.className = 'file-info';
+        const name = document.createElement('span');
+        name.className = 'file-name';
+        name.title = file.name;
+        name.textContent = file.name;
+        const meta = document.createElement('span');
+        meta.className = 'file-meta';
+        meta.textContent = `${formatSize(file.size)} · ${formatExpiry(file.expiresAt)}`;
+        info.append(name, meta);
+        const actions = document.createElement('div');
+        actions.className = 'file-actions';
+        const download = document.createElement('a');
+        download.className = 'file-action';
+        download.href = `/files/${encodeURIComponent(file.id)}`;
+        download.textContent = 'Download';
+        download.setAttribute('aria-label', `Download ${file.name}`);
+        const remove = document.createElement('button');
+        remove.className = 'file-action';
+        remove.type = 'button';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', `Remove ${file.name}`);
+        remove.addEventListener('click', async () => {
+          if (!confirm(`Remove "${file.name}" from shared files?`)) return;
+          remove.disabled = true;
+          try {
+            const res = await fetch(`/files/${encodeURIComponent(file.id)}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error('Could not remove file');
+            setFileStatus(`Removed ${file.name}`);
+            await loadFiles(true);
+          } catch {
+            remove.disabled = false;
+            setFileStatus(`Could not remove ${file.name}. Try again.`, true);
+          }
+        });
+        actions.append(download, remove);
+        row.append(info, actions);
+        fileList.append(row);
+      }
+    }
+
+    async function loadFiles(force = false) {
+      try {
+        const res = await fetch('/files');
+        if (!res.ok) throw new Error('Could not load files');
+        const { files } = await res.json();
+        const key = JSON.stringify(files);
+        if (force || key !== fileListKey) {
+          renderFiles(files);
+          fileListKey = key;
+        }
+        if (fileStatus.textContent === 'Could not load shared files. Retrying…') setFileStatus('');
+      } catch {
+        if (!fileListKey) setFileStatus('Could not load shared files. Retrying…', true);
+      }
+    }
+
+    function uploadFile(file, index, total) {
+      return new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open('POST', '/files');
+        request.setRequestHeader('Content-Type', 'application/octet-stream');
+        request.setRequestHeader('X-File-Name', encodeURIComponent(file.name));
+        request.upload.onprogress = (event) => {
+          if (event.lengthComputable) {
+            setFileStatus(`Uploading ${index}/${total}: ${file.name} · ${Math.round(event.loaded / event.total * 100)}%`);
+          }
+        };
+        request.onload = () => {
+          if (request.status >= 200 && request.status < 300) resolve();
+          else {
+            let message = 'Upload failed';
+            try { message = JSON.parse(request.responseText).error || message; } catch {}
+            reject(new Error(message));
+          }
+        };
+        request.onerror = () => reject(new Error('Network error'));
+        request.send(file);
+      });
+    }
+
+    async function addFiles(selected) {
+      const files = Array.from(selected);
+      if (!files.length || isUploading) return;
+      isUploading = true;
+      chooseButton.disabled = true;
+      let uploaded = 0;
+      const errors = [];
+      for (const [index, file] of files.entries()) {
+        if (!file.size) {
+          errors.push(`${file.name}: empty files cannot be shared`);
+          continue;
+        }
+        if (file.size > MAX_FILE_SIZE) {
+          errors.push(`${file.name}: exceeds 100 MiB`);
+          continue;
+        }
+        try {
+          setFileStatus(`Uploading ${index + 1}/${files.length}: ${file.name}`);
+          await uploadFile(file, index + 1, files.length);
+          uploaded++;
+          await loadFiles(true);
+        } catch (error) {
+          errors.push(`${file.name}: ${error.message}`);
+        }
+      }
+      chooseButton.disabled = false;
+      isUploading = false;
+      fileInput.value = '';
+      if (errors.length) setFileStatus(errors.join(' · '), true);
+      else setFileStatus(`${uploaded} ${uploaded === 1 ? 'file' : 'files'} ready to share`);
+    }
+
+    chooseButton.addEventListener('click', () => fileInput.click());
+    fileInput.addEventListener('change', () => addFiles(fileInput.files));
+    dropZone.addEventListener('dragover', (event) => {
+      event.preventDefault();
+      dropZone.classList.add('dragging');
+    });
+    dropZone.addEventListener('dragleave', (event) => {
+      if (!dropZone.contains(event.relatedTarget)) dropZone.classList.remove('dragging');
+    });
+    dropZone.addEventListener('drop', (event) => {
+      event.preventDefault();
+      dropZone.classList.remove('dragging');
+      addFiles(event.dataTransfer.files);
+    });
+
     textarea.addEventListener('input', () => {
       clearTimeout(saveTimer);
       setStatus('saving');
@@ -187,12 +418,13 @@
       clearTimeout(pollTimer);
       pollTimer = setTimeout(async () => {
         if (!isSaving) await load();
+        await loadFiles();
         schedulePoll();
       }, POLL_INTERVAL);
     }
 
     (async () => {
-      await load();
+      await Promise.all([load(), loadFiles()]);
       textarea.focus();
       schedulePoll();
     })();
